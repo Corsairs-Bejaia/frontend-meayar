@@ -1,0 +1,3463 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/auth/register": {
+      "post": {
+        "description": "Creates a new User (tenant) with the provided credentials and company name. Returns a JWT access + refresh token pair so the client can immediately start making authenticated requests.",
+        "operationId": "AuthController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Account created — returns token pair",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjbHg5MDAxIn0.abc",
+                      "refreshToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjbHg5MDAxIn0.xyz"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (invalid email, password too short, etc.)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 400,
+                    "message": [
+                      "password must be longer than or equal to 8 characters"
+                    ],
+                    "error": "Bad Request"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Email address is already registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 409,
+                    "message": "Email already in use",
+                    "error": "Conflict"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Register a new tenant account",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "description": "Validates credentials via the Passport `local` strategy and returns a JWT access token (short-lived) and a refresh token (long-lived). Pass the access token as `Authorization: Bearer \u003Ctoken\u003E` on subsequent requests.",
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Credentials valid — returns token pair",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjbHg5MDAxIn0.abc",
+                      "refreshToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjbHg5MDAxIn0.xyz"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid email or password",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 401,
+                    "message": "Unauthorized"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Authenticate with email + password",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "description": "Validates the provided refresh token and issues a new short-lived access token. The refresh token itself is **not** rotated.",
+        "operationId": "AuthController_refresh",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Refresh successful — returns new access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjbHg5MDAxIn0.abc"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Refresh token is invalid or expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 401,
+                    "message": "Invalid or expired refresh token",
+                    "error": "Unauthorized"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Exchange a refresh token for a new access token",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "description": "Returns the public fields of the currently authenticated User/tenant. Useful for bootstrapping the frontend after login.",
+        "operationId": "AuthController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Tenant profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9usr00001",
+                      "email": "admin@doctome.dz",
+                      "companyName": "DoctomeDZ",
+                      "planTier": "free",
+                      "createdAt": "2026-01-10T08:00:00.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get the authenticated tenant profile",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/api/api-keys": {
+      "post": {
+        "description": "Generates a new API key for the authenticated tenant. The full raw key is **only returned once** in this response — it is not stored in plain text. Store it securely immediately.\n\nPass the key as `x-api-key: \u003CrawKey\u003E` on server-to-server requests.",
+        "operationId": "ApiKeysController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateApiKeyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Key created — includes the raw key (one-time)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9key00001",
+                      "name": "Production Key",
+                      "keyPrefix": "ib_",
+                      "permissions": [
+                        "verifications:read",
+                        "verifications:write"
+                      ],
+                      "rateLimit": 100,
+                      "isActive": true,
+                      "lastUsedAt": null,
+                      "createdAt": "2026-01-15T10:00:00.000Z",
+                      "rawKey": "ib_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 400,
+                    "message": [
+                      "name must be longer than or equal to 2 characters"
+                    ],
+                    "error": "Bad Request"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a new API key",
+        "tags": [
+          "API Keys"
+        ]
+      },
+      "get": {
+        "description": "Returns metadata for all keys — the raw key value is **never** returned here.",
+        "operationId": "ApiKeysController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Array of API key metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": [
+                      {
+                        "id": "clx9key00001",
+                        "name": "Production Key",
+                        "keyPrefix": "ib_",
+                        "permissions": [
+                          "verifications:read",
+                          "verifications:write"
+                        ],
+                        "rateLimit": 100,
+                        "isActive": true,
+                        "lastUsedAt": null,
+                        "createdAt": "2026-01-15T10:00:00.000Z"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List all API keys for the authenticated tenant",
+        "tags": [
+          "API Keys"
+        ]
+      }
+    },
+    "/api/api-keys/{id}": {
+      "delete": {
+        "description": "Permanently deletes the API key. Any in-flight requests using this key will immediately start receiving 401 responses.",
+        "operationId": "ApiKeysController_revoke",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "CUID of the API key to revoke",
+            "schema": {
+              "example": "clx9key00001",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Key revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9key00001",
+                      "isActive": false
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "404": {
+            "description": "Key not found or does not belong to this tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 404,
+                    "message": "API key not found",
+                    "error": "Not Found"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Revoke (delete) an API key",
+        "tags": [
+          "API Keys"
+        ]
+      }
+    },
+    "/api/templates": {
+      "get": {
+        "description": "Returns all templates created by the authenticated tenant, each with its full list of extraction fields.",
+        "operationId": "TemplatesController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Array of templates with fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": [
+                      {
+                        "id": "clx9tpl00001",
+                        "userId": "clx9usr00001",
+                        "name": "University Diploma",
+                        "slug": "university-diploma",
+                        "docType": "diploma",
+                        "description": "Standard Algerian university diploma template",
+                        "sampleImageUrl": null,
+                        "createdAt": "2026-01-20T10:00:00.000Z",
+                        "updatedAt": "2026-01-20T10:00:00.000Z",
+                        "fields": [
+                          {
+                            "id": "clx9fld00001",
+                            "templateId": "clx9tpl00001",
+                            "fieldName": "full_name_fr",
+                            "fieldLabelFr": "Nom complet (FR)",
+                            "fieldLabelAr": "الاسم الكامل",
+                            "fieldType": "name_fr",
+                            "isRequired": true,
+                            "validationRegex": null,
+                            "sortOrder": 0
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List all document templates for this tenant",
+        "tags": [
+          "Templates"
+        ]
+      },
+      "post": {
+        "description": "Creates a template that defines which fields to extract from a specific document type. Fields can be included in the request body or added later via `POST /templates/:id/fields`.",
+        "operationId": "TemplatesController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTemplateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Template created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9tpl00001",
+                      "userId": "clx9usr00001",
+                      "name": "University Diploma",
+                      "slug": "university-diploma",
+                      "docType": "diploma",
+                      "description": "Standard Algerian university diploma template",
+                      "sampleImageUrl": null,
+                      "createdAt": "2026-01-20T10:00:00.000Z",
+                      "updatedAt": "2026-01-20T10:00:00.000Z",
+                      "fields": [
+                        {
+                          "id": "clx9fld00001",
+                          "templateId": "clx9tpl00001",
+                          "fieldName": "full_name_fr",
+                          "fieldLabelFr": "Nom complet (FR)",
+                          "fieldLabelAr": "الاسم الكامل",
+                          "fieldType": "name_fr",
+                          "isRequired": true,
+                          "validationRegex": null,
+                          "sortOrder": 0
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 400,
+                    "message": [
+                      "name must be longer than or equal to 2 characters"
+                    ],
+                    "error": "Bad Request"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a new document template",
+        "tags": [
+          "Templates"
+        ]
+      }
+    },
+    "/api/templates/{id}": {
+      "get": {
+        "operationId": "TemplatesController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "CUID of the template",
+            "schema": {
+              "example": "clx9tpl00001",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Template with fields and visual positions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9tpl00001",
+                      "userId": "clx9usr00001",
+                      "name": "University Diploma",
+                      "slug": "university-diploma",
+                      "docType": "diploma",
+                      "description": "Standard Algerian university diploma template",
+                      "sampleImageUrl": null,
+                      "createdAt": "2026-01-20T10:00:00.000Z",
+                      "updatedAt": "2026-01-20T10:00:00.000Z",
+                      "fields": [
+                        {
+                          "id": "clx9fld00001",
+                          "templateId": "clx9tpl00001",
+                          "fieldName": "full_name_fr",
+                          "fieldLabelFr": "Nom complet (FR)",
+                          "fieldLabelAr": "الاسم الكامل",
+                          "fieldType": "name_fr",
+                          "isRequired": true,
+                          "validationRegex": null,
+                          "sortOrder": 0
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "404": {
+            "description": "Template not found or does not belong to this tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 404,
+                    "message": "Template not found",
+                    "error": "Not Found"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a template by ID (includes fields and field positions)",
+        "tags": [
+          "Templates"
+        ]
+      },
+      "put": {
+        "description": "Partial update — only fields present in the request body are changed.",
+        "operationId": "TemplatesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "CUID of the template",
+            "schema": {
+              "example": "clx9tpl00001",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTemplateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated template",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9tpl00001",
+                      "userId": "clx9usr00001",
+                      "name": "Diploma v2",
+                      "slug": "university-diploma",
+                      "docType": "diploma",
+                      "description": "Standard Algerian university diploma template",
+                      "sampleImageUrl": null,
+                      "createdAt": "2026-01-20T10:00:00.000Z",
+                      "updatedAt": "2026-01-20T10:00:00.000Z",
+                      "fields": [
+                        {
+                          "id": "clx9fld00001",
+                          "templateId": "clx9tpl00001",
+                          "fieldName": "full_name_fr",
+                          "fieldLabelFr": "Nom complet (FR)",
+                          "fieldLabelAr": "الاسم الكامل",
+                          "fieldType": "name_fr",
+                          "isRequired": true,
+                          "validationRegex": null,
+                          "sortOrder": 0
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "404": {
+            "description": "Template not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update template metadata",
+        "tags": [
+          "Templates"
+        ]
+      },
+      "delete": {
+        "description": "Hard-deletes the template and all associated field definitions.",
+        "operationId": "TemplatesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "CUID of the template",
+            "schema": {
+              "example": "clx9tpl00001",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Template deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9tpl00001",
+                      "userId": "clx9usr00001",
+                      "name": "University Diploma",
+                      "slug": "university-diploma",
+                      "docType": "diploma",
+                      "description": "Standard Algerian university diploma template",
+                      "sampleImageUrl": null,
+                      "createdAt": "2026-01-20T10:00:00.000Z",
+                      "updatedAt": "2026-01-20T10:00:00.000Z",
+                      "fields": [
+                        {
+                          "id": "clx9fld00001",
+                          "templateId": "clx9tpl00001",
+                          "fieldName": "full_name_fr",
+                          "fieldLabelFr": "Nom complet (FR)",
+                          "fieldLabelAr": "الاسم الكامل",
+                          "fieldType": "name_fr",
+                          "isRequired": true,
+                          "validationRegex": null,
+                          "sortOrder": 0
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "404": {
+            "description": "Template not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a template and all its fields",
+        "tags": [
+          "Templates"
+        ]
+      }
+    },
+    "/api/templates/{id}/fields": {
+      "post": {
+        "description": "Appends a new extraction field to the template's field list.",
+        "operationId": "TemplatesController_addField",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "CUID of the parent template",
+            "schema": {
+              "example": "clx9tpl00001",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTemplateFieldDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Field added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9fld00001",
+                      "templateId": "clx9tpl00001",
+                      "fieldName": "full_name_fr",
+                      "fieldLabelFr": "Nom complet (FR)",
+                      "fieldLabelAr": "الاسم الكامل",
+                      "fieldType": "name_fr",
+                      "isRequired": true,
+                      "validationRegex": null,
+                      "sortOrder": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "404": {
+            "description": "Template not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Add a field to a template",
+        "tags": [
+          "Templates"
+        ]
+      }
+    },
+    "/api/templates/{id}/fields/{fieldId}": {
+      "put": {
+        "operationId": "TemplatesController_updateField",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "CUID of the parent template",
+            "schema": {
+              "example": "clx9tpl00001",
+              "type": "string"
+            }
+          },
+          {
+            "name": "fieldId",
+            "required": true,
+            "in": "path",
+            "description": "CUID of the field",
+            "schema": {
+              "example": "clx9fld00001",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTemplateFieldDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated field",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9fld00001",
+                      "templateId": "clx9tpl00001",
+                      "fieldName": "full_name_fr",
+                      "fieldLabelFr": "Prénom et nom",
+                      "fieldLabelAr": "الاسم الكامل",
+                      "fieldType": "name_fr",
+                      "isRequired": true,
+                      "validationRegex": null,
+                      "sortOrder": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "404": {
+            "description": "Template or field not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update an existing template field",
+        "tags": [
+          "Templates"
+        ]
+      },
+      "delete": {
+        "operationId": "TemplatesController_removeField",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "CUID of the parent template",
+            "schema": {
+              "example": "clx9tpl00001",
+              "type": "string"
+            }
+          },
+          {
+            "name": "fieldId",
+            "required": true,
+            "in": "path",
+            "description": "CUID of the field",
+            "schema": {
+              "example": "clx9fld00001",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Field removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9fld00001",
+                      "templateId": "clx9tpl00001",
+                      "fieldName": "full_name_fr",
+                      "fieldLabelFr": "Nom complet (FR)",
+                      "fieldLabelAr": "الاسم الكامل",
+                      "fieldType": "name_fr",
+                      "isRequired": true,
+                      "validationRegex": null,
+                      "sortOrder": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "404": {
+            "description": "Template or field not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove a field from a template",
+        "tags": [
+          "Templates"
+        ]
+      }
+    },
+    "/api/templates/{id}/field-positions": {
+      "post": {
+        "description": "Stores the relative coordinates `{ x, y, width, height }` (values 0.0–1.0) for each field name. These positions are used by the AI service to locate fields on scanned documents.",
+        "operationId": "TemplatesController_saveFieldPositions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "CUID of the template",
+            "schema": {
+              "example": "clx9tpl00001",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveFieldPositionsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Positions saved — returns updated template with field positions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9tpl00001",
+                      "userId": "clx9usr00001",
+                      "name": "University Diploma",
+                      "slug": "university-diploma",
+                      "docType": "diploma",
+                      "description": "Standard Algerian university diploma template",
+                      "sampleImageUrl": null,
+                      "createdAt": "2026-01-20T10:00:00.000Z",
+                      "updatedAt": "2026-01-20T10:00:00.000Z",
+                      "fields": [
+                        {
+                          "id": "clx9fld00001",
+                          "templateId": "clx9tpl00001",
+                          "fieldName": "full_name_fr",
+                          "fieldLabelFr": "Nom complet (FR)",
+                          "fieldLabelAr": "الاسم الكامل",
+                          "fieldType": "name_fr",
+                          "isRequired": true,
+                          "validationRegex": null,
+                          "sortOrder": 0
+                        }
+                      ],
+                      "fieldPositions": {
+                        "full_name_fr": {
+                          "x": 0.1,
+                          "y": 0.15,
+                          "width": 0.6,
+                          "height": 0.05
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "404": {
+            "description": "Template not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Save visual field bounding boxes on the sample image",
+        "tags": [
+          "Templates"
+        ]
+      }
+    },
+    "/api/templates/{id}/sample-image": {
+      "post": {
+        "description": "Uploads a representative scan/photo of the document type. The image is stored in object storage and the presigned URL is saved on the template. Use the visual editor in the dashboard to draw field bounding boxes on this image.",
+        "operationId": "TemplatesController_uploadSampleImage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "CUID of the template",
+            "schema": {
+              "example": "clx9tpl00001",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "JPEG / PNG sample image"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Image uploaded — returns updated template with sampleImageUrl",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9tpl00001",
+                      "userId": "clx9usr00001",
+                      "name": "University Diploma",
+                      "slug": "university-diploma",
+                      "docType": "diploma",
+                      "description": "Standard Algerian university diploma template",
+                      "sampleImageUrl": "https://r2.cloudflarestorage.com/bucket/templates/clx9tpl00001/sample.jpg?...",
+                      "createdAt": "2026-01-20T10:00:00.000Z",
+                      "updatedAt": "2026-01-20T10:00:00.000Z",
+                      "fields": [
+                        {
+                          "id": "clx9fld00001",
+                          "templateId": "clx9tpl00001",
+                          "fieldName": "full_name_fr",
+                          "fieldLabelFr": "Nom complet (FR)",
+                          "fieldLabelAr": "الاسم الكامل",
+                          "fieldType": "name_fr",
+                          "isRequired": true,
+                          "validationRegex": null,
+                          "sortOrder": 0
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "404": {
+            "description": "Template not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Upload a sample document image for the template",
+        "tags": [
+          "Templates"
+        ]
+      }
+    },
+    "/api/documents/upload": {
+      "post": {
+        "description": "Uploads a document to object storage and creates a `Document` record linked to the specified verification. Accepted MIME types: `image/jpeg`, `image/png`, `application/pdf`. Maximum file size: **20 MB**.",
+        "operationId": "DocumentsController_upload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file",
+                  "docType",
+                  "verificationId"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The document file (JPEG / PNG / PDF, max 20 MB)"
+                  },
+                  "docType": {
+                    "type": "string",
+                    "enum": [
+                      "national_id",
+                      "diploma",
+                      "affiliation",
+                      "agreement",
+                      "chifa",
+                      "ordonnance",
+                      "other"
+                    ],
+                    "example": "diploma"
+                  },
+                  "verificationId": {
+                    "type": "string",
+                    "description": "CUID of the verification this document belongs to",
+                    "example": "clx9vrf00002"
+                  },
+                  "templateId": {
+                    "type": "string",
+                    "description": "Optional template to use for AI field extraction",
+                    "example": "clx9tpl00003"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Document uploaded and record created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9doc00001",
+                      "verificationId": "clx9vrf00002",
+                      "docType": "diploma",
+                      "storagePath": "clx9usr00001/clx9vrf00002/diploma.pdf",
+                      "templateId": null,
+                      "mimeType": "application/pdf",
+                      "uploadedAt": "2026-05-01T09:54:00.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing required fields or file too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 400,
+                    "message": "File size exceeds the 20 MB limit",
+                    "error": "Bad Request"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "403": {
+            "description": "Verification does not belong to this tenant"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Upload a document file (JPEG, PNG, PDF — max 20 MB)",
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/api/documents/verification/{verificationId}": {
+      "get": {
+        "description": "Returns all documents uploaded for the given verification. Returns 403 if the verification does not belong to the authenticated tenant.",
+        "operationId": "DocumentsController_findByVerification",
+        "parameters": [
+          {
+            "name": "verificationId",
+            "required": true,
+            "in": "path",
+            "description": "UUID of the parent verification",
+            "schema": {
+              "example": "clx9vrf00002",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of documents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": [
+                      {
+                        "id": "clx9doc00001",
+                        "verificationId": "clx9vrf00002",
+                        "docType": "diploma",
+                        "storagePath": "clx9usr00001/clx9vrf00002/diploma.pdf",
+                        "templateId": null,
+                        "mimeType": "application/pdf",
+                        "uploadedAt": "2026-05-01T09:54:00.000Z"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "403": {
+            "description": "Verification does not belong to this tenant"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List all documents belonging to a verification",
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/api/documents/{id}/url": {
+      "get": {
+        "description": "Generates a short-lived (1 hour) pre-signed S3/R2 URL that allows the client to download the document file directly from object storage without proxying through the API.",
+        "operationId": "DocumentsController_getPresignedUrl",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID of the document",
+            "schema": {
+              "example": "clx9doc00001",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Presigned download URL (valid for 1 hour)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "url": "https://r2.cloudflarestorage.com/bucket/path/diploma.pdf?X-Amz-Signature=...",
+                      "expiresIn": 3600
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "404": {
+            "description": "Document not found or does not belong to this tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 404,
+                    "message": "Document not found",
+                    "error": "Not Found"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a fresh presigned download URL for a document",
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/api/verifications": {
+      "post": {
+        "description": "Creates a `Verification` record, enqueues a BullMQ job, and immediately returns the new record (status: `pending`). The pipeline runs asynchronously; subscribe to `GET /verifications/:id/stream` (SSE) to watch progress in real time.\n\n**Pipeline stages:**\n1. AI document extraction (confidence score)\n2. CNAS affiliation check\n3. Score → decision mapping:\n   - ≥ 80 % → `approved`\n   - 50–79 % → `manual_review` (report auto-created)\n   - \u003C 50 % → `rejected` (report auto-created)",
+        "operationId": "VerificationsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateVerificationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Verification created and job enqueued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9vrf00001",
+                      "doctorId": "clx9doc00002",
+                      "tenantId": "clx9usr00001",
+                      "status": "pending",
+                      "score": null,
+                      "decision": null,
+                      "startedAt": "2026-05-01T09:55:00.000Z",
+                      "completedAt": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "403": {
+            "description": "Doctor does not belong to this tenant"
+          },
+          "404": {
+            "description": "Doctor not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 404,
+                    "message": "Doctor not found",
+                    "error": "Not Found"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Start a new verification workflow for a doctor",
+        "tags": [
+          "Verifications"
+        ]
+      },
+      "get": {
+        "description": "Returns a paginated list ordered by `startedAt` descending.",
+        "operationId": "VerificationsController_findAll",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated verification list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "items": [
+                        {
+                          "id": "clx9vrf00001",
+                          "doctorId": "clx9doc00002",
+                          "tenantId": "clx9usr00001",
+                          "status": "completed",
+                          "score": 0.92,
+                          "decision": "approved",
+                          "startedAt": "2026-05-01T09:55:00.000Z",
+                          "completedAt": "2026-05-01T09:56:00.000Z"
+                        }
+                      ],
+                      "total": 58,
+                      "page": 1,
+                      "limit": 20,
+                      "totalPages": 3
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List verifications for the current tenant",
+        "tags": [
+          "Verifications"
+        ]
+      }
+    },
+    "/api/verifications/{id}": {
+      "get": {
+        "description": "Returns the verification with its pipeline steps and documents.",
+        "operationId": "VerificationsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "CUID of the verification",
+            "schema": {
+              "example": "clx9vrf00001",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verification detail with steps and documents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9vrf00001",
+                      "doctorId": "clx9doc00002",
+                      "tenantId": "clx9usr00001",
+                      "status": "completed",
+                      "score": 0.92,
+                      "decision": "approved",
+                      "startedAt": "2026-05-01T09:55:00.000Z",
+                      "completedAt": "2026-05-01T09:56:00.000Z",
+                      "steps": [
+                        {
+                          "id": "clx9stp00003",
+                          "stepType": "ai_extraction",
+                          "status": "completed",
+                          "confidence": 0.92,
+                          "startedAt": "2026-05-01T09:55:00.500Z",
+                          "completedAt": "2026-05-01T09:55:07.000Z"
+                        }
+                      ],
+                      "documents": [
+                        {
+                          "id": "clx9doc00004",
+                          "docType": "diploma",
+                          "storagePath": "tenant/verif/diploma.pdf"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "403": {
+            "description": "Verification does not belong to this tenant"
+          },
+          "404": {
+            "description": "Verification not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 404,
+                    "message": "Verification not found",
+                    "error": "Not Found"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a verification by ID",
+        "tags": [
+          "Verifications"
+        ]
+      }
+    },
+    "/api/verifications/{id}/stream": {
+      "get": {
+        "description": "Opens a Server-Sent Events connection that emits progress events as the verification pipeline executes.\n\n**Authentication:** This endpoint is **public** — no Bearer token required. The CUID in the URL acts as an unguessable access token.\n\n**Usage:**\n```\nGET /api/verifications/:id/stream\nAccept: text/event-stream\n```\n\n**Event types:** `started` | `step_started` | `step_completed` | `step_failed` | `completed` | `failed`\n\n**Keep-alive:** a `: heartbeat` comment is sent every 25 s to prevent proxy timeouts.",
+        "operationId": "VerificationsController_stream",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "CUID of the verification to stream",
+            "schema": {
+              "example": "clx9vrf00001",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "text/event-stream — sequence of JSON event objects",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "example": "data: {\"type\":\"started\",\"verificationId\":\"clx9vrf00001\",\"timestamp\":\"2026-05-01T09:55:00.100Z\"}\n\ndata: {\"type\":\"step_started\",\"verificationId\":\"clx9vrf00001\",\"step\":\"ai_extraction\",\"timestamp\":\"2026-05-01T09:55:00.500Z\"}\n\ndata: {\"type\":\"step_completed\",\"verificationId\":\"clx9vrf00001\",\"step\":\"ai_extraction\",\"data\":{\"confidence\":0.92},\"timestamp\":\"2026-05-01T09:55:07.000Z\"}\n\ndata: {\"type\":\"completed\",\"verificationId\":\"clx9vrf00001\",\"data\":{\"score\":0.92,\"decision\":\"approved\"},\"timestamp\":\"2026-05-01T09:55:08.000Z\"}"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "SSE stream of real-time progress events for a verification",
+        "tags": [
+          "Verifications"
+        ]
+      }
+    },
+    "/api/reports": {
+      "get": {
+        "description": "Returns a paginated list of `VerificationReport` records scoped to the authenticated tenant. Reports are auto-created by the pipeline whenever the AI decision is `manual_review` or `rejected`. Use `?status=pending_review` to fetch items waiting for a human decision.",
+        "operationId": "ReportsController_findAll",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (1-based, default: 1)",
+            "schema": {
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page (default: 20)",
+            "schema": {
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Filter by report status. Omit to return all.",
+            "schema": {
+              "enum": [
+                "pending_review",
+                "reviewed"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated review queue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "items": [
+                        {
+                          "id": "clx9abc00001",
+                          "verificationId": "clx9def00002",
+                          "contentFormat": "markdown",
+                          "status": "pending_review",
+                          "decision": null,
+                          "decisionNote": null,
+                          "reviewedBy": null,
+                          "reviewedAt": null,
+                          "createdAt": "2026-05-01T10:00:00.000Z",
+                          "updatedAt": "2026-05-01T10:00:00.000Z",
+                          "verification": {
+                            "id": "clx9def00002",
+                            "score": 0.65,
+                            "decision": "manual_review",
+                            "startedAt": "2026-05-01T09:55:00.000Z",
+                            "doctor": {
+                              "fullNameFr": "Benali Mohamed",
+                              "fullNameAr": "بنعلي محمد",
+                              "nationalIdNumber": "198501234567890"
+                            }
+                          },
+                          "_count": {
+                            "comments": 2
+                          }
+                        }
+                      ],
+                      "total": 14,
+                      "page": 1,
+                      "limit": 20,
+                      "totalPages": 1
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List verification reports (review queue)",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/reports/by-verification/{verificationId}": {
+      "get": {
+        "description": "Convenience lookup — resolves the report from a verification ID rather than the report ID. Returns 404 if no report has been generated yet (i.e. the verification was `approved` by the AI without human review).",
+        "operationId": "ReportsController_findByVerification",
+        "parameters": [
+          {
+            "name": "verificationId",
+            "required": true,
+            "in": "path",
+            "description": "CUID of the parent verification",
+            "schema": {
+              "example": "clx9def00002",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full report with verification context, pipeline steps, documents and comments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9abc00001",
+                      "verificationId": "clx9def00002",
+                      "contentFormat": "markdown",
+                      "status": "pending_review",
+                      "decision": null,
+                      "decisionNote": null,
+                      "reviewedBy": null,
+                      "reviewedAt": null,
+                      "createdAt": "2026-05-01T10:00:00.000Z",
+                      "updatedAt": "2026-05-01T10:00:00.000Z",
+                      "verification": {
+                        "id": "clx9def00002",
+                        "score": 0.65,
+                        "decision": "manual_review",
+                        "startedAt": "2026-05-01T09:55:00.000Z",
+                        "doctor": {
+                          "id": "clx9doc00003",
+                          "fullNameFr": "Benali Mohamed",
+                          "fullNameAr": "بنعلي محمد",
+                          "nationalIdNumber": "198501234567890",
+                          "specialty": "Cardiologie"
+                        },
+                        "status": "completed",
+                        "steps": [
+                          {
+                            "id": "clx9stp00004",
+                            "stepType": "ai_extraction",
+                            "status": "completed",
+                            "confidence": 0.65,
+                            "startedAt": "2026-05-01T09:55:05.000Z",
+                            "completedAt": "2026-05-01T09:55:12.000Z"
+                          },
+                          {
+                            "id": "clx9stp00005",
+                            "stepType": "cnas_check",
+                            "status": "completed",
+                            "confidence": null,
+                            "startedAt": "2026-05-01T09:55:12.000Z",
+                            "completedAt": "2026-05-01T09:55:13.000Z"
+                          }
+                        ],
+                        "documents": [
+                          {
+                            "id": "clx9doc00006",
+                            "docType": "diploma",
+                            "storagePath": "tenant-id/verif-id/diploma.pdf",
+                            "uploadedAt": "2026-05-01T09:54:00.000Z"
+                          }
+                        ]
+                      },
+                      "_count": {
+                        "comments": 2
+                      },
+                      "contentRaw": "# Rapport de vérification\n\n**Score**: 65 / 100\n\n## Résultats pipeline\n...",
+                      "comments": [
+                        {
+                          "id": "clx9cmt00007",
+                          "content": "Diploma scan is blurry on page 2.",
+                          "createdAt": "2026-05-01T11:00:00.000Z",
+                          "author": {
+                            "id": "clx9usr00008",
+                            "email": "reviewer@clinic.dz",
+                            "companyName": "Clinic Alger"
+                          }
+                        }
+                      ],
+                      "reviewer": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "404": {
+            "description": "No report found for this verification ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 404,
+                    "message": "No report found for this verification",
+                    "error": "Not Found"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get the report for a specific verification",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/reports/{id}": {
+      "get": {
+        "description": "Returns the complete report including the raw AI-generated content, verification context with all pipeline steps and uploaded documents, inline reviewer comments, and reviewer metadata.",
+        "operationId": "ReportsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "CUID of the report",
+            "schema": {
+              "example": "clx9abc00001",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full report detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9abc00001",
+                      "verificationId": "clx9def00002",
+                      "contentFormat": "markdown",
+                      "status": "pending_review",
+                      "decision": null,
+                      "decisionNote": null,
+                      "reviewedBy": null,
+                      "reviewedAt": null,
+                      "createdAt": "2026-05-01T10:00:00.000Z",
+                      "updatedAt": "2026-05-01T10:00:00.000Z",
+                      "verification": {
+                        "id": "clx9def00002",
+                        "score": 0.65,
+                        "decision": "manual_review",
+                        "startedAt": "2026-05-01T09:55:00.000Z",
+                        "doctor": {
+                          "id": "clx9doc00003",
+                          "fullNameFr": "Benali Mohamed",
+                          "fullNameAr": "بنعلي محمد",
+                          "nationalIdNumber": "198501234567890",
+                          "specialty": "Cardiologie"
+                        },
+                        "status": "completed",
+                        "steps": [
+                          {
+                            "id": "clx9stp00004",
+                            "stepType": "ai_extraction",
+                            "status": "completed",
+                            "confidence": 0.65,
+                            "startedAt": "2026-05-01T09:55:05.000Z",
+                            "completedAt": "2026-05-01T09:55:12.000Z"
+                          },
+                          {
+                            "id": "clx9stp00005",
+                            "stepType": "cnas_check",
+                            "status": "completed",
+                            "confidence": null,
+                            "startedAt": "2026-05-01T09:55:12.000Z",
+                            "completedAt": "2026-05-01T09:55:13.000Z"
+                          }
+                        ],
+                        "documents": [
+                          {
+                            "id": "clx9doc00006",
+                            "docType": "diploma",
+                            "storagePath": "tenant-id/verif-id/diploma.pdf",
+                            "uploadedAt": "2026-05-01T09:54:00.000Z"
+                          }
+                        ]
+                      },
+                      "_count": {
+                        "comments": 2
+                      },
+                      "contentRaw": "# Rapport de vérification\n\n**Score**: 65 / 100\n\n## Résultats pipeline\n...",
+                      "comments": [
+                        {
+                          "id": "clx9cmt00007",
+                          "content": "Diploma scan is blurry on page 2.",
+                          "createdAt": "2026-05-01T11:00:00.000Z",
+                          "author": {
+                            "id": "clx9usr00008",
+                            "email": "reviewer@clinic.dz",
+                            "companyName": "Clinic Alger"
+                          }
+                        }
+                      ],
+                      "reviewer": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "404": {
+            "description": "Report not found or does not belong to this tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 404,
+                    "message": "Report not found",
+                    "error": "Not Found"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a report by ID",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/reports/{id}/decision": {
+      "post": {
+        "description": "Records the reviewer's verdict and updates the parent verification:\n\n| decision | verification.decision | verification.status |\n|----------|-----------------------|---------------------|\n| `approved` | `human_approved` | `completed` |\n| `rejected` | `human_rejected` | `completed` |\n| `resubmit` | `resubmit_requested` | `pending` |\n\nAll three paths create an `AuditLog` entry with action `human_review_completed`. Returns **400** if the report has already been reviewed.",
+        "operationId": "ReportsController_submitDecision",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "CUID of the report to review",
+            "schema": {
+              "example": "clx9abc00001",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitDecisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Decision recorded — returns the updated report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9abc00001",
+                      "verificationId": "clx9def00002",
+                      "contentFormat": "markdown",
+                      "status": "reviewed",
+                      "decision": "approved",
+                      "decisionNote": "All documents verified successfully.",
+                      "reviewedBy": "clx9usr00008",
+                      "reviewedAt": "2026-05-02T08:30:00.000Z",
+                      "createdAt": "2026-05-01T10:00:00.000Z",
+                      "updatedAt": "2026-05-01T10:00:00.000Z",
+                      "verification": {
+                        "id": "clx9def00002",
+                        "score": 0.65,
+                        "decision": "manual_review",
+                        "startedAt": "2026-05-01T09:55:00.000Z",
+                        "doctor": {
+                          "id": "clx9doc00003",
+                          "fullNameFr": "Benali Mohamed",
+                          "fullNameAr": "بنعلي محمد",
+                          "nationalIdNumber": "198501234567890",
+                          "specialty": "Cardiologie"
+                        },
+                        "status": "completed",
+                        "steps": [
+                          {
+                            "id": "clx9stp00004",
+                            "stepType": "ai_extraction",
+                            "status": "completed",
+                            "confidence": 0.65,
+                            "startedAt": "2026-05-01T09:55:05.000Z",
+                            "completedAt": "2026-05-01T09:55:12.000Z"
+                          },
+                          {
+                            "id": "clx9stp00005",
+                            "stepType": "cnas_check",
+                            "status": "completed",
+                            "confidence": null,
+                            "startedAt": "2026-05-01T09:55:12.000Z",
+                            "completedAt": "2026-05-01T09:55:13.000Z"
+                          }
+                        ],
+                        "documents": [
+                          {
+                            "id": "clx9doc00006",
+                            "docType": "diploma",
+                            "storagePath": "tenant-id/verif-id/diploma.pdf",
+                            "uploadedAt": "2026-05-01T09:54:00.000Z"
+                          }
+                        ]
+                      },
+                      "_count": {
+                        "comments": 2
+                      },
+                      "contentRaw": "# Rapport de vérification\n\n**Score**: 65 / 100\n\n## Résultats pipeline\n...",
+                      "comments": [
+                        {
+                          "id": "clx9cmt00007",
+                          "content": "Diploma scan is blurry on page 2.",
+                          "createdAt": "2026-05-01T11:00:00.000Z",
+                          "author": {
+                            "id": "clx9usr00008",
+                            "email": "reviewer@clinic.dz",
+                            "companyName": "Clinic Alger"
+                          }
+                        }
+                      ],
+                      "reviewer": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Report has already been reviewed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 400,
+                    "message": "Report has already been reviewed (status: reviewed)",
+                    "error": "Bad Request"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "404": {
+            "description": "Report not found or does not belong to this tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 404,
+                    "message": "Report not found",
+                    "error": "Not Found"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Submit a human review decision",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/reports/{id}/comments": {
+      "post": {
+        "description": "Appends a reviewer comment to the report thread. Comments are ordered chronologically and included in the `GET /reports/:id` response. Returns **403** if the report has already been reviewed (status: `reviewed`).",
+        "operationId": "ReportsController_addComment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "CUID of the report",
+            "schema": {
+              "example": "clx9abc00001",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddCommentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Comment created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9cmt00009",
+                      "reportId": "clx9abc00001",
+                      "authorId": "clx9usr00008",
+                      "content": "The diploma scan on page 2 is illegible. Please ask the doctor to re-upload.",
+                      "createdAt": "2026-05-02T09:00:00.000Z",
+                      "author": {
+                        "id": "clx9usr00008",
+                        "email": "reviewer@clinic.dz",
+                        "companyName": "Clinic Alger"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "403": {
+            "description": "Cannot add comments to an already reviewed report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 403,
+                    "message": "Cannot add comments to an already reviewed report",
+                    "error": "Forbidden"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Report not found or does not belong to this tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 404,
+                    "message": "Report not found",
+                    "error": "Not Found"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Add an inline comment to a report",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/webhooks/endpoints": {
+      "post": {
+        "operationId": "WebhooksController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEndpointDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Register a new webhook endpoint",
+        "tags": [
+          "webhooks"
+        ]
+      },
+      "get": {
+        "operationId": "WebhooksController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List all webhook endpoints",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/api/webhooks/endpoints/{id}": {
+      "get": {
+        "operationId": "WebhooksController_getOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a webhook endpoint",
+        "tags": [
+          "webhooks"
+        ]
+      },
+      "patch": {
+        "operationId": "WebhooksController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEndpointDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a webhook endpoint",
+        "tags": [
+          "webhooks"
+        ]
+      },
+      "delete": {
+        "operationId": "WebhooksController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a webhook endpoint",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/api/webhooks/endpoints/{id}/secret": {
+      "get": {
+        "description": "Use this secret to verify the `svix-signature` header on incoming webhook payloads.",
+        "operationId": "WebhooksController_getSecret",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get the signing secret for an endpoint",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/api/webhooks/endpoints/{id}/rotate-secret": {
+      "post": {
+        "operationId": "WebhooksController_rotateSecret",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Rotate the signing secret for an endpoint",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/api/webhooks/endpoints/{id}/deliveries": {
+      "get": {
+        "operationId": "WebhooksController_deliveries",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List recent delivery attempts for an endpoint",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/api/dashboard/stats": {
+      "get": {
+        "description": "Returns high-level counts used to populate the dashboard stat cards: total doctors, total verifications (by status), active API keys, and a short recent-activity excerpt.",
+        "operationId": "DashboardController_getStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Aggregated stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "doctors": {
+                        "total": 128,
+                        "active": 120,
+                        "inactive": 6,
+                        "suspended": 2
+                      },
+                      "verifications": {
+                        "total": 340,
+                        "pending": 3,
+                        "running": 1,
+                        "completed": 310,
+                        "failed": 26
+                      },
+                      "apiKeys": {
+                        "total": 4,
+                        "active": 3
+                      },
+                      "recentActivity": [
+                        {
+                          "id": "clx9log00001",
+                          "verificationId": "clx9vrf00001",
+                          "action": "verification_completed",
+                          "actor": "clx9usr00001",
+                          "createdAt": "2026-05-01T09:56:00.000Z"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Aggregate stats for the tenant dashboard",
+        "tags": [
+          "Dashboard"
+        ]
+      }
+    },
+    "/api/dashboard/activity": {
+      "get": {
+        "description": "Returns `AuditLog` entries for the current tenant ordered by `createdAt` descending. Each entry records a significant system event (verification completed, human review, document uploaded, etc.).",
+        "operationId": "DashboardController_getActivity",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (1-based)",
+            "schema": {
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated audit log entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "items": [
+                        {
+                          "id": "clx9log00001",
+                          "verificationId": "clx9vrf00001",
+                          "action": "verification_completed",
+                          "actor": "clx9usr00001",
+                          "detailsJson": {
+                            "score": 0.92,
+                            "decision": "approved"
+                          },
+                          "createdAt": "2026-05-01T09:56:00.000Z"
+                        },
+                        {
+                          "id": "clx9log00002",
+                          "verificationId": "clx9vrf00002",
+                          "action": "human_review_completed",
+                          "actor": "clx9usr00001",
+                          "detailsJson": {
+                            "decision": "approved",
+                            "note": "All documents valid."
+                          },
+                          "createdAt": "2026-05-01T11:30:00.000Z"
+                        }
+                      ],
+                      "total": 148,
+                      "page": 1,
+                      "limit": 20,
+                      "totalPages": 8
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Paginated audit log / activity feed for the tenant",
+        "tags": [
+          "Dashboard"
+        ]
+      }
+    },
+    "/api/dashboard/chart": {
+      "get": {
+        "description": "Returns one data point per calendar day for the last 30 days. Each point includes counts broken down by outcome. Intended for the dashboard line/bar chart.",
+        "operationId": "DashboardController_getChartData",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Array of daily data points",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": [
+                      {
+                        "date": "2026-04-02",
+                        "total": 4,
+                        "approved": 3,
+                        "manual_review": 1,
+                        "rejected": 0
+                      },
+                      {
+                        "date": "2026-04-03",
+                        "total": 7,
+                        "approved": 6,
+                        "manual_review": 0,
+                        "rejected": 1
+                      },
+                      {
+                        "date": "2026-05-01",
+                        "total": 12,
+                        "approved": 10,
+                        "manual_review": 1,
+                        "rejected": 1
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Daily verification counts for the last 30 days (chart data)",
+        "tags": [
+          "Dashboard"
+        ]
+      }
+    },
+    "/api/doctors": {
+      "post": {
+        "description": "Creates a Doctor record linked to the authenticated tenant. The `nationalIdNumber` must be exactly 18 digits (Algerian NIN format).",
+        "operationId": "DoctorsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDoctorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Doctor created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9doc00001",
+                      "tenantId": "clx9usr00001",
+                      "fullNameFr": "Ahmed Benali",
+                      "fullNameAr": "أحمد بن علي",
+                      "nationalIdNumber": "198501234567890123",
+                      "specialty": null,
+                      "status": "active",
+                      "createdAt": "2026-02-01T08:00:00.000Z",
+                      "updatedAt": "2026-02-01T08:00:00.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (e.g. NIN not 18 digits)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 400,
+                    "message": [
+                      "nationalIdNumber must be exactly 18 digits"
+                    ],
+                    "error": "Bad Request"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Register a new doctor under this tenant",
+        "tags": [
+          "Doctors"
+        ]
+      },
+      "get": {
+        "description": "Returns a paginated list of doctors belonging to the authenticated tenant. Use `status` to filter by `active` / `inactive` / `suspended`. Use `search` for a full-text match on `fullNameFr`, `fullNameAr`, or `nationalIdNumber`.",
+        "operationId": "DoctorsController_findAll",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Filter by doctor status",
+            "schema": {
+              "enum": [
+                "active",
+                "inactive",
+                "suspended"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Full-text search on name (FR/AR) or NIN",
+            "schema": {
+              "example": "Benali",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated doctor list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "items": [
+                        {
+                          "id": "clx9doc00001",
+                          "tenantId": "clx9usr00001",
+                          "fullNameFr": "Ahmed Benali",
+                          "fullNameAr": "أحمد بن علي",
+                          "nationalIdNumber": "198501234567890123",
+                          "specialty": null,
+                          "status": "active",
+                          "createdAt": "2026-02-01T08:00:00.000Z",
+                          "updatedAt": "2026-02-01T08:00:00.000Z"
+                        }
+                      ],
+                      "total": 42,
+                      "page": 1,
+                      "limit": 20,
+                      "totalPages": 3
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List doctors for this tenant (paginated, filterable)",
+        "tags": [
+          "Doctors"
+        ]
+      }
+    },
+    "/api/doctors/{id}": {
+      "get": {
+        "description": "Returns the doctor profile including the last 10 verifications.",
+        "operationId": "DoctorsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID of the doctor",
+            "schema": {
+              "example": "clx9doc00001",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Doctor profile with recent verifications",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9doc00001",
+                      "tenantId": "clx9usr00001",
+                      "fullNameFr": "Ahmed Benali",
+                      "fullNameAr": "أحمد بن علي",
+                      "nationalIdNumber": "198501234567890123",
+                      "specialty": null,
+                      "status": "active",
+                      "createdAt": "2026-02-01T08:00:00.000Z",
+                      "updatedAt": "2026-02-01T08:00:00.000Z",
+                      "verifications": [
+                        {
+                          "id": "clx9vrf00002",
+                          "status": "completed",
+                          "decision": "approved",
+                          "score": 0.92,
+                          "startedAt": "2026-04-10T09:00:00.000Z",
+                          "completedAt": "2026-04-10T09:01:00.000Z"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "404": {
+            "description": "Doctor not found or does not belong to this tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 404,
+                    "message": "Doctor not found",
+                    "error": "Not Found"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a doctor by ID",
+        "tags": [
+          "Doctors"
+        ]
+      },
+      "put": {
+        "description": "Partial update — only fields present in the request body are changed.",
+        "operationId": "DoctorsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID of the doctor",
+            "schema": {
+              "example": "clx9doc00001",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDoctorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated doctor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9doc00001",
+                      "tenantId": "clx9usr00001",
+                      "fullNameFr": "Ahmed Benali",
+                      "fullNameAr": "أحمد بن علي",
+                      "nationalIdNumber": "198501234567890123",
+                      "specialty": null,
+                      "status": "inactive",
+                      "createdAt": "2026-02-01T08:00:00.000Z",
+                      "updatedAt": "2026-02-01T08:00:00.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "404": {
+            "description": "Doctor not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 404,
+                    "message": "Doctor not found",
+                    "error": "Not Found"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update doctor details or status",
+        "tags": [
+          "Doctors"
+        ]
+      },
+      "delete": {
+        "description": "Hard-deletes the doctor record together with all linked verifications, documents, audit logs, and webhook deliveries (cascade).",
+        "operationId": "DoctorsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID of the doctor",
+            "schema": {
+              "example": "clx9doc00001",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Doctor deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "success": true,
+                    "data": {
+                      "id": "clx9doc00001",
+                      "tenantId": "clx9usr00001",
+                      "fullNameFr": "Ahmed Benali",
+                      "fullNameAr": "أحمد بن علي",
+                      "nationalIdNumber": "198501234567890123",
+                      "specialty": null,
+                      "status": "active",
+                      "createdAt": "2026-02-01T08:00:00.000Z",
+                      "updatedAt": "2026-02-01T08:00:00.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid Bearer token"
+          },
+          "404": {
+            "description": "Doctor not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "statusCode": 404,
+                    "message": "Doctor not found",
+                    "error": "Not Found"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a doctor and all associated data",
+        "tags": [
+          "Doctors"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Innobyte Trust API",
+    "description": "Medical credential verification platform",
+    "version": "1.0",
+    "contact": {
+
+    }
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      },
+      "api-key": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key"
+      }
+    },
+    "schemas": {
+      "RegisterDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "admin@doctome.dz"
+          },
+          "password": {
+            "type": "string",
+            "example": "SuperSecret123!"
+          },
+          "companyName": {
+            "type": "string",
+            "example": "DoctomeDZ"
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "companyName"
+        ]
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "admin@doctome.dz"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "RefreshDto": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "description": "Long-lived refresh token returned by /auth/login"
+          }
+        },
+        "required": [
+          "refreshToken"
+        ]
+      },
+      "CreateApiKeyDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Production Key"
+          },
+          "permissions": {
+            "example": [
+              "verifications:read",
+              "verifications:write"
+            ],
+            "description": "Scope permissions granted to this key",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rateLimit": {
+            "type": "number",
+            "example": 100,
+            "description": "Max requests per minute"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "CreateTemplateFieldDto": {
+        "type": "object",
+        "properties": {
+          "fieldName": {
+            "type": "string",
+            "example": "full_name_fr"
+          },
+          "fieldLabelFr": {
+            "type": "string",
+            "example": "Nom complet (FR)"
+          },
+          "fieldLabelAr": {
+            "type": "string",
+            "example": "الاسم الكامل"
+          },
+          "fieldType": {
+            "type": "string",
+            "example": "name_fr",
+            "description": "text | number | date | year | boolean | enum | name_ar | name_fr"
+          },
+          "isRequired": {
+            "type": "boolean",
+            "default": true
+          },
+          "validationRegex": {
+            "type": "string",
+            "example": "^\\d{18}$",
+            "description": "Validation regex pattern"
+          },
+          "sortOrder": {
+            "type": "number",
+            "example": 0
+          }
+        },
+        "required": [
+          "fieldName",
+          "fieldLabelFr",
+          "fieldType"
+        ]
+      },
+      "CreateTemplateDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "University Diploma"
+          },
+          "slug": {
+            "type": "string",
+            "example": "diploma"
+          },
+          "docType": {
+            "type": "string",
+            "example": "diploma",
+            "description": "national_id | diploma | affiliation | agreement | chifa | ordonnance | custom"
+          },
+          "description": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateTemplateFieldDto"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "slug",
+          "docType"
+        ]
+      },
+      "UpdateTemplateDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UpdateTemplateFieldDto": {
+        "type": "object",
+        "properties": {
+          "fieldLabelFr": {
+            "type": "string"
+          },
+          "fieldLabelAr": {
+            "type": "string"
+          },
+          "fieldType": {
+            "type": "string"
+          },
+          "isRequired": {
+            "type": "boolean"
+          },
+          "validationRegex": {
+            "type": "string"
+          },
+          "sortOrder": {
+            "type": "number"
+          }
+        }
+      },
+      "SaveFieldPositionsDto": {
+        "type": "object",
+        "properties": {
+          "positions": {
+            "type": "object",
+            "description": "Map of fieldName → relative coordinates { x, y, width, height } (0.0–1.0)",
+            "example": {
+              "full_name_fr": {
+                "x": 0.1,
+                "y": 0.15,
+                "width": 0.6,
+                "height": 0.05
+              }
+            }
+          }
+        },
+        "required": [
+          "positions"
+        ]
+      },
+      "CreateVerificationDto": {
+        "type": "object",
+        "properties": {
+          "doctorId": {
+            "type": "string",
+            "description": "Doctor ID to run the verification for"
+          },
+          "workflowConfig": {
+            "type": "object",
+            "description": "Optional workflow config overrides (JSON)"
+          }
+        },
+        "required": [
+          "doctorId"
+        ]
+      },
+      "SubmitDecisionDto": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "rejected",
+              "resubmit"
+            ],
+            "description": "Human review outcome for this verification",
+            "example": "approved"
+          },
+          "decisionNote": {
+            "type": "string",
+            "description": "Optional note explaining the decision (max 2 000 characters). Displayed to the tenant alongside the final verdict.",
+            "maxLength": 2000,
+            "example": "Medical licence number confirmed against official registry. CNAS affiliation valid as of verification date."
+          }
+        },
+        "required": [
+          "decision"
+        ]
+      },
+      "AddCommentDto": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Comment text (1–2 000 characters)",
+            "minLength": 1,
+            "maxLength": 2000,
+            "example": "The diploma scan on page 2 is illegible. Please ask the doctor to re-upload a higher-resolution version."
+          }
+        },
+        "required": [
+          "content"
+        ]
+      },
+      "CreateEndpointDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "example": "https://yourapp.com/webhooks"
+          },
+          "description": {
+            "type": "string",
+            "example": "Production webhook"
+          },
+          "eventTypes": {
+            "type": "array",
+            "description": "Event types to subscribe to. Omit (or leave empty) to receive all events.",
+            "example": [
+              "verification.completed",
+              "report.reviewed"
+            ],
+            "items": {
+              "type": "string",
+              "enum": [
+                "verification.completed",
+                "verification.failed",
+                "report.created",
+                "report.reviewed"
+              ]
+            }
+          }
+        },
+        "required": [
+          "url"
+        ]
+      },
+      "UpdateEndpointDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "example": "https://yourapp.com/webhooks"
+          },
+          "description": {
+            "type": "string",
+            "example": "Production webhook"
+          },
+          "eventTypes": {
+            "type": "array",
+            "example": [
+              "verification.completed"
+            ],
+            "items": {
+              "type": "string",
+              "enum": [
+                "verification.completed",
+                "verification.failed",
+                "report.created",
+                "report.reviewed"
+              ]
+            }
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "CreateDoctorDto": {
+        "type": "object",
+        "properties": {
+          "fullNameFr": {
+            "type": "string",
+            "example": "Ahmed Benali"
+          },
+          "fullNameAr": {
+            "type": "string",
+            "example": "أحمد بن علي"
+          },
+          "nationalIdNumber": {
+            "type": "string",
+            "description": "Algerian NIN — 18 digits",
+            "example": "198501234567890123"
+          }
+        },
+        "required": [
+          "fullNameFr",
+          "nationalIdNumber"
+        ]
+      },
+      "UpdateDoctorDto": {
+        "type": "object",
+        "properties": {
+          "fullNameFr": {
+            "type": "string"
+          },
+          "fullNameAr": {
+            "type": "string"
+          },
+          "nationalIdNumber": {
+            "type": "string",
+            "description": "Algerian NIN — 18 digits"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "verified",
+              "rejected",
+              "manual_review"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
